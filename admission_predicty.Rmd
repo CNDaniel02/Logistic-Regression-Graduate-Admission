@@ -115,6 +115,7 @@ par(mfrow = c(1, 1))
 ```
 
 ```{r}
+
 # Load necessary libraries
 library(readr)
 library(ggcorrplot)
@@ -152,7 +153,7 @@ trainData <- data[trainIndex, ]
 testData <- data[-trainIndex, ]
 
 # Fit a linear regression model
-model <- lm(Chance.of.Admit ~ GRE.Score + TOEFL.Score + University.Rating + SOP + LOR + CGPA + Research, data = trainData)
+model <- lm(Chance_of_Admit ~ GRE_Score + TOEFL_Score + University_Rating + SOP + LOR + CGPA + Research, data = trainData)
 
 # Summarize the model
 summary(model)
@@ -161,7 +162,7 @@ summary(model)
 predictions <- predict(model, newdata = testData)
 
 # Calculate Mean Squared Error (MSE)
-mse <- mean((testData$Chance.of.Admit - predictions)^2)woba
+mse <- mean((testData$Chance.of.Admit - predictions)^2)
 
 # Calculate R-squared
 rss <- sum((testData$Chance.of.Admit - predictions)^2)
@@ -180,7 +181,7 @@ trainData <- data[trainIndex, ]
 testData <- data[-trainIndex, ]
 
 # Fit the reduced linear regression model excluding insignificant variables
-reduced_model <- lm(Chance.of.Admit ~ GRE.Score + TOEFL.Score + LOR + CGPA + Research, data = trainData)
+reduced_model <- lm(Chance_of_Admit ~ GRE_Score + TOEFL_Score + LOR + CGPA + Research, data = trainData)
 
 # Summarize the reduced model
 summary(reduced_model)
