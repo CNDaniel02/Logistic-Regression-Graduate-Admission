@@ -1,0 +1,204 @@
+---
+title: "Final Project"
+output: html_document
+date: "2024-12-06"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r}
+library(readr)
+Admission <- read_csv("Admission_Predict_Ver1.1.csv")
+View(Admission)
+```
+
+```{r}
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(readr)
+library(gmodels)
+library(GGally)
+library(caret)
+```
+
+
+
+```{r}
+# Load necessary library
+library(tidyr)
+
+# Load the dataset
+data <- read.csv("Admission_Predict_Ver1.1.csv")
+
+# Check for missing values in the dataset
+sum(is.na(data))
+colSums(is.na(data))
+data_clean <- na.omit(data)
+
+# Outliers for CGPA - <5th or >95th percentile
+qnt <- quantile(data$CGPA, probs=c(.05, .95), na.rm = TRUE)
+data$CGPA[data$CGPA < qnt[1]] <- qnt[1]
+data$CGPA[data$CGPA > qnt[2]] <- qnt[2]
+
+# Duplicate rows
+sum(duplicated(data))
+data_clean <- data[!duplicated(data), ]
+
+# Convert the dataset to long format
+long_data <- pivot_longer(data, cols = !"Serial.No.", names_to = "Variable", values_to = "Value")
+#print(long_data)
+
+# Convert categorical columns into factors
+# Assuming "University Rating" and "Research" are categorical variables
+data$University.Rating <- as.factor(data$University.Rating)
+data$Research <- as.factor(data$Research)
+str(data)
+```
+```{r}
+par(mfrow = c(1, 2))
+# Frequency distribution for University Rating
+university_rating_freq <- table(data$University.Rating)
+cat("Frequency Distribution for University Rating:\n")
+print(university_rating_freq)
+
+# Plot University Rating vs. Chance of Admit
+plot(data$University.Rating, data$Chance.of.Admit, main="University Rating",
+     xlab="University Rating", ylab="Chance of Admit", pch=19, col="red")
+
+
+# Frequency distribution for Research
+research_freq <- table(data$Research)
+cat("Frequency Distribution for Research:\n")
+print(research_freq)
+# Create a boxplot to visualize the effect of Research on Chance of Admit
+boxplot(data$Chance.of.Admit ~ data$Research, 
+        main = "Research",
+        xlab = "Research Experience (0 = No, 1 = Yes)", 
+        ylab = "Chance of Admit",
+        col = c("lightblue", "lightgreen"))
+```
+
+```{r}
+par(mfrow = c(2, 3))
+
+# Plot GRE Score vs. Chance of Admit
+plot(data$GRE.Score, data$Chance.of.Admit, main="GRE Score",
+     xlab="GRE Score", ylab="Chance of Admit", pch=19, col="blue")
+
+# Plot TOEFL Score vs. Chance of Admit
+plot(data$TOEFL.Score, data$Chance.of.Admit, main="TOEFL Score",
+     xlab="TOEFL Score", ylab="Chance of Admit", pch=19, col="green")
+
+# Plot SOP vs. Chance of Admit
+plot(data$SOP, data$Chance.of.Admit, main="SOP",
+     xlab="SOP", ylab="Chance of Admit", pch=19, col="purple")
+
+# Plot LOR vs. Chance of Admit
+plot(data$LOR, data$Chance.of.Admit, main="LOR",
+     xlab="LOR", ylab="Chance of Admit", pch=19, col="orange")
+
+# Plot CGPA vs. Chance of Admit
+plot(data$CGPA, data$Chance.of.Admit, main="CGPA",
+     xlab="CGPA", ylab="Chance of Admit", pch=19, col="brown")
+
+# Reset plotting area to default
+par(mfrow = c(1, 1))
+```
+
+```{r}
+# Load necessary libraries
+library(readr)
+library(ggcorrplot)
+
+# Load the dataset
+
+# Rename columns to make them more R-friendly
+colnames(data) <- c("Serial_No", "GRE_Score", "TOEFL_Score", "University_Rating", "SOP", "LOR", "CGPA", "Research", "Chance_of_Admit")
+
+# Select relevant columns for analysis
+subset_data <- data[, c("GRE_Score", "TOEFL_Score", "SOP", "LOR", "CGPA")]
+
+# Ensure all selected columns are numeric
+subset_data <- subset_data %>% mutate(across(everything(), as.numeric))
+
+# Plot histograms for each numerical variable
+par(mfrow = c(2, 3))
+for (col in colnames(subset_data)) {
+  if (!is.null(subset_data[[col]])) {
+    hist(subset_data[[col]], main = paste("Histogram of", col), xlab = col, col = "skyblue", border = "black")
+  }
+}
+
+# Plot correlation matrix
+cor_matrix <- cor(subset_data, use = "complete.obs")
+ggcorrplot(cor_matrix, hc.order = TRUE, type = "lower", lab = TRUE)
+
+```
+
+```{r}
+# Split the data into training and testing sets
+set.seed(42)
+trainIndex <- sample(1:nrow(data), 0.8 * nrow(data))
+trainData <- data[trainIndex, ]
+testData <- data[-trainIndex, ]
+
+# Fit a linear regression model
+model <- lm(Chance.of.Admit ~ GRE.Score + TOEFL.Score + University.Rating + SOP + LOR + CGPA + Research, data = trainData)
+
+# Summarize the model
+summary(model)
+
+# Make predictions on the test set
+predictions <- predict(model, newdata = testData)
+
+# Calculate Mean Squared Error (MSE)
+mse <- mean((testData$Chance.of.Admit - predictions)^2)woba
+
+# Calculate R-squared
+rss <- sum((testData$Chance.of.Admit - predictions)^2)
+tss <- sum((testData$Chance.of.Admit - mean(trainData$Chance.of.Admit))^2)
+r2 <- 1 - (rss/tss)
+
+# Print MSE and R-squared for the reduced model
+print(paste("Full Model MSE:", mse))
+print(paste("Full Model R-squared:", r2))
+```
+```{r}
+# Split the data into training and testing sets
+set.seed(42)
+trainIndex <- sample(1:nrow(data), 0.8 * nrow(data))
+trainData <- data[trainIndex, ]
+testData <- data[-trainIndex, ]
+
+# Fit the reduced linear regression model excluding insignificant variables
+reduced_model <- lm(Chance.of.Admit ~ GRE.Score + TOEFL.Score + LOR + CGPA + Research, data = trainData)
+
+# Summarize the reduced model
+summary(reduced_model)
+
+# Make predictions on the test set using the reduced model
+reduced_predictions <- predict(reduced_model, newdata = testData)
+
+# Calculate Mean Squared Error (MSE) for the reduced model
+reduced_mse <- mean((testData$Chance.of.Admit - reduced_predictions)^2, na.rm = TRUE)
+
+# Calculate R-squared for the reduced model
+rss <- sum((testData$Chance.of.Admit - reduced_predictions)^2, na.rm = TRUE)
+tss <- sum((testData$Chance.of.Admit - mean(trainData$Chance.of.Admit, na.rm = TRUE))^2, na.rm = TRUE)
+reduced_r2 <- 1 - (rss/tss)
+
+# Print MSE and R-squared for the reduced model
+print(paste("Reduced Model MSE:", reduced_mse))
+print(paste("Reduced Model R-squared:", reduced_r2))
+
+```
+
