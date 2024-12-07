@@ -39,30 +39,62 @@ library(tidyr)
 # Load the dataset
 data <- read.csv("Admission_Predict_Ver1.1.csv")
 
-# Check for missing values in the dataset
-sum(is.na(data))
-colSums(is.na(data))
-data_clean <- na.omit(data)
+print(sum(is.na(data)))
 
-# Outliers for CGPA - <5th or >95th percentile
-qnt <- quantile(data$CGPA, probs=c(.05, .95), na.rm = TRUE)
-data$CGPA[data$CGPA < qnt[1]] <- qnt[1]
-data$CGPA[data$CGPA > qnt[2]] <- qnt[2]
+print(sum(duplicated(data)))
 
-# Duplicate rows
-sum(duplicated(data))
-data_clean <- data[!duplicated(data), ]
+
+
+# 绘制连续变量的直方图和箱线图
+par(mfrow = c(2, 2)) # 设置图形布局
+for (col in c("GRE.Score", "TOEFL.Score", "CGPA")) {
+  hist(data[[col]], main = paste("Histogram of", col), xlab = col, col = "skyblue", border = "black")
+  boxplot(data[[col]], main = paste("Boxplot of", col), ylab = col, col = "orange")
+}
+
+# 绘制分类变量的柱状图和箱线图
+# 设置图形排列
+par(mfrow = c(2, 2))
+barplot(table(data$University.Rating), main = "University Rating Distribution", col = "lightblue")
+boxplot(data$Chance.of.Admit ~ data$University.Rating, main = "Chance of Admit by University Rating",
+        xlab = "University Rating", ylab = "Chance of Admit", col = "lightgreen")
+
+
+
+
+# Histogram and boxplot for Research
+barplot(table(data$Research), main = "Barplot of Research", col = "skyblue", 
+        xlab = "Research (0 = No, 1 = Yes)", ylab = "Frequency")
+boxplot(data$Chance.of.Admit ~ data$Research, main = "Research vs Chance of Admit", 
+        xlab = "Research", ylab = "Chance of Admit", col = c("lightblue", "lightgreen"))
+
+# Histogram and boxplot for SOP
+hist(data$SOP, main = "Histogram of SOP", col = "skyblue", xlab = "SOP")
+boxplot(data$Chance.of.Admit ~ data$SOP, main = "SOP vs Chance of Admit", 
+        xlab = "SOP", ylab = "Chance of Admit", col = "lightgreen")
+
+# Histogram and boxplot for LOR
+hist(data$LOR, main = "Histogram of LOR", col = "skyblue", xlab = "LOR")
+boxplot(data$Chance.of.Admit ~ data$LOR, main = "LOR vs Chance of Admit", 
+        xlab = "LOR", ylab = "Chance of Admit", col = "lightgreen")
+
+# Reset图形排列
+par(mfrow = c(1, 1))
+
+
 
 # Convert the dataset to long format
 long_data <- pivot_longer(data, cols = !"Serial.No.", names_to = "Variable", values_to = "Value")
-#print(long_data)
 
 # Convert categorical columns into factors
 # Assuming "University Rating" and "Research" are categorical variables
 data$University.Rating <- as.factor(data$University.Rating)
 data$Research <- as.factor(data$Research)
-str(data)
+#str(data)
 ```
+#整个代码没有严重的异常值不需要处理异常值，LOR有一个值是1是一个异常值但是我觉得是真实情况不用处理
+#分布比较集中，应该不需要transform
+
 ```{r}
 par(mfrow = c(1, 2))
 # Frequency distribution for University Rating
@@ -73,6 +105,8 @@ print(university_rating_freq)
 # Plot University Rating vs. Chance of Admit
 plot(data$University.Rating, data$Chance.of.Admit, main="University Rating",
      xlab="University Rating", ylab="Chance of Admit", pch=19, col="red")
+
+
 
 
 # Frequency distribution for Research
@@ -86,6 +120,7 @@ boxplot(data$Chance.of.Admit ~ data$Research,
         ylab = "Chance of Admit",
         col = c("lightblue", "lightgreen"))
 ```
+#确定分类变量对录取概率的影响，初步探索数据特征
 
 ```{r}
 par(mfrow = c(2, 3))
@@ -113,6 +148,8 @@ plot(data$CGPA, data$Chance.of.Admit, main="CGPA",
 # Reset plotting area to default
 par(mfrow = c(1, 1))
 ```
+#SOP增长可能是非线性得，可能需要使用多项式回归
+
 
 ```{r}
 
@@ -144,6 +181,40 @@ cor_matrix <- cor(subset_data, use = "complete.obs")
 ggcorrplot(cor_matrix, hc.order = TRUE, type = "lower", lab = TRUE)
 
 ```
+#CGPA，TOEFL，GRE这些都高度相关，需要进行PCA
+#LOR与其他变量相关性较低，或许是相对独立因素
+
+
+```{r}
+# 线性回归建模
+model <- lm(Chance.of.Admit ~ GRE.Score + TOEFL.Score + CGPA + SOP + LOR + University.Rating + Research, data = data)
+
+# 模型摘要
+summary(model)
+
+# 计算 VIF
+library(car)
+vif_values <- vif(model)
+print(vif_values)
+
+
+```
+#R-squared, Adjusted R-squared足够高，预测误差较低，不需要使用PCA
+
+```{r}
+# 计算 Adjusted R-squared 和残差分布
+summary(model)
+
+# 可视化残差
+par(mfrow = c(1, 2))
+plot(model$fitted.values, model$residuals, 
+     main = "Residuals vs Fitted", xlab = "Fitted Values", ylab = "Residuals")
+hist(model$residuals, main = "Residual Histogram", xlab = "Residuals")
+par(mfrow = c(1, 1))
+
+```
+
+
 
 ```{r}
 # Split the data into training and testing sets
@@ -153,7 +224,7 @@ trainData <- data[trainIndex, ]
 testData <- data[-trainIndex, ]
 
 # Fit a linear regression model
-model <- lm(Chance_of_Admit ~ GRE_Score + TOEFL_Score + University_Rating + SOP + LOR + CGPA + Research, data = trainData)
+model <- lm(Chance.of.Admit ~ GRE.Score + TOEFL.Score + University.Rating + SOP + LOR + CGPA + Research, data = trainData)
 
 # Summarize the model
 summary(model)
@@ -173,6 +244,7 @@ r2 <- 1 - (rss/tss)
 print(paste("Full Model MSE:", mse))
 print(paste("Full Model R-squared:", r2))
 ```
+
 ```{r}
 # Split the data into training and testing sets
 set.seed(42)
@@ -181,7 +253,7 @@ trainData <- data[trainIndex, ]
 testData <- data[-trainIndex, ]
 
 # Fit the reduced linear regression model excluding insignificant variables
-reduced_model <- lm(Chance_of_Admit ~ GRE_Score + TOEFL_Score + LOR + CGPA + Research, data = trainData)
+reduced_model <- lm(Chance.of.Admit ~ GRE.Score + TOEFL.Score + LOR + CGPA + Research, data = trainData)
 
 # Summarize the reduced model
 summary(reduced_model)
