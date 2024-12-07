@@ -212,10 +212,64 @@ plot(model$fitted.values, model$residuals,
 hist(model$residuals, main = "Residual Histogram", xlab = "Residuals")
 par(mfrow = c(1, 1))
 
+qqnorm(model$residuals, main = "Q-Q Plot of Residuals")
+qqline(model$residuals, col = "red")
+
+shapiro.test(model$residuals)
+
+
+```
+#根据qq图怀疑残差不是正态分布，使用shapiro test进行检测确定残差不是正态分布,这对推断如t test，CI会产生影响
+#但是如果我们的主要目标是预测而不是推断，正态性的偏离可能不会显著影响模型预测能力
+#从qq图来看，残差得偏离主要集中在尾部，实际上轻微的尾部偏离对线性回归的影响可能并不大
+#如果有顾虑可以考虑transform data
+
+
+```{r}
+model_poly <- lm(Chance.of.Admit ~ GRE.Score + TOEFL.Score + CGPA + poly(SOP, 2) + LOR + University.Rating + Research, data = data)
+summary(model_poly)
+#polynomial regression
+```
+```{r}
+model_interaction <- lm(Chance.of.Admit ~ GRE.Score * University.Rating + TOEFL.Score + CGPA + SOP + LOR + Research, data = data)
+summary(model_interaction)
+#interaction model
+```
+```{r}
+library(caret)
+pca <- preProcess(data[, c("GRE.Score", "TOEFL.Score", "CGPA", "SOP", "LOR")], method = "pca", pcaComp = 3)
+pca_data <- predict(pca, data)
+model_pca <- lm(Chance.of.Admit ~ PC1 + PC2 + PC3 + University.Rating + Research, data = cbind(data, pca_data))
+summary(model_pca)
+#PCA model
 ```
 
 
+```{r}
+library(caret)
 
+# 定义模型
+model_list <- list(
+  base = lm(Chance.of.Admit ~ GRE.Score + TOEFL.Score + CGPA + SOP + LOR + University.Rating + Research, data = data),
+  poly = lm(Chance.of.Admit ~ GRE.Score + TOEFL.Score + CGPA + poly(SOP, 2) + LOR + University.Rating + Research, data = data),
+  interaction = lm(Chance.of.Admit ~ GRE.Score * University.Rating + TOEFL.Score + CGPA + SOP + LOR + Research, data = data)
+)
+
+# 定义交叉验证
+cv_results <- lapply(model_list, function(model) {
+  train_control <- trainControl(method = "cv", number = 100)
+  train(Chance.of.Admit ~ ., data = data, method = "lm", trControl = train_control)
+})
+
+# 打印 RMSE 比较
+sapply(cv_results, function(res) res$results$RMSE)
+
+```
+
+#根据Cross validation，不同的model并没有太大区别，决定使用linear regression
+
+
+#接下来根据MSE和R^2发现reduced model和full model区别不大，可以使用reduced model？
 ```{r}
 # Split the data into training and testing sets
 set.seed(42)
