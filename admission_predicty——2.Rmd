@@ -158,6 +158,7 @@ pca_bic<-BIC(model_pca)
 ridge<-cv.glmnet(as.matrix(data[, -c(1, 9)]),data$Chance.of.Admit,alpha = 0)
 ridge_pred<-predict(ridge,s=ridge$lambda.min,newx=as.matrix(data[,-c(1,9)]))
 
+
 #reference: https://glmnet.stanford.edu/articles/glmnet.html
 ```
 
@@ -166,34 +167,26 @@ ridge_pred<-predict(ridge,s=ridge$lambda.min,newx=as.matrix(data[,-c(1,9)]))
 pca_result<-prcomp(num_features,scale.=TRUE)
 summary(pca_result)
 
-pca_data <- as.data.frame(pca_result$x[, 1:2])
-colnames(pca_data) <- c("PC1","PC2")
-pca_data$Chance.of.Admit <- data$Chance.of.Admit
+pca_data<-as.data.frame(pca_result$x[,1:2])
+colnames(pca_data)<-c("PC1","PC2")
+pca_data$Chance.of.Admit<-data$Chance.of.Admit
 
-X_pca <- as.matrix(pca_data[, -3])
-y_pca <- pca_data$Chance.of.Admit
-ridge_pca <- cv.glmnet(X_pca, y_pca, alpha = 0, nfolds = 5)
-ridge_pca_pred <- predict(ridge_pca, s = ridge_pca$lambda.min, newx = X_pca)
-ridge_pca_mse <- mean((y_pca - ridge_pca_pred)^2)
+X_pca<-as.matrix(pca_data[,-3])
+y_pca<-pca_data$Chance.of.Admit
+ridge_pca<-cv.glmnet(X_pca,y_pca,alpha=0,nfolds=5)
+ridge_pca_pred<-predict(ridge_pca,s=ridge_pca$lambda.min,newx=X_pca)
+ridge_pca_mse<-mean((y_pca-ridge_pca_pred)^2)
 
 
+ridge_pca_r2<-1-sum((y_pca-ridge_pca_pred)^2)/sum((y_pca-mean(y_pca))^2)
+ridge_pca_rse<-sqrt(mean((y_pca-ridge_pca_pred)^2)) 
+ridge_pca_mse<-mean((y_pca-ridge_pca_pred)^2)
 
-ridge_pca_r2 <- 1 - sum((y_pca - ridge_pca_pred)^2) / sum((y_pca - mean(y_pca))^2)  # R2
-ridge_pca_rse <- sqrt(mean((y_pca - ridge_pca_pred)^2))  # Residual Standard Error
-ridge_pca_mse <- mean((y_pca - ridge_pca_pred)^2)  # MSE
+n_pca<-length(y_pca)  # # samples
+p_pca<-ncol(X_pca)  # # pca components
+ridge_pca_aic<-n_pca*log(ridge_pca_mse)+2*p_pca 
+ridge_pca_bic<-n_pca*log(ridge_pca_mse)+log(n_pca)*p_pca
 
-n_pca <- length(y_pca)  # 样本数
-p_pca <- ncol(X_pca)  # 主成分数量
-ridge_pca_aic <- n_pca * log(ridge_pca_mse) + 2 * p_pca  # AIC
-ridge_pca_bic <- n_pca * log(ridge_pca_mse) + log(n_pca) * p_pca  # BIC
-
-# 打印 PCA 模型的结果
-cat("PCA Model Metrics:\n")
-cat("R2:", ridge_pca_r2, "\n")
-cat("MSE:", ridge_pca_mse, "\n")
-cat("Residual Standard Error:", ridge_pca_rse, "\n")
-cat("AIC:", ridge_pca_aic, "\n")
-cat("BIC:", ridge_pca_bic, "\n")
 ```
 
 
@@ -201,23 +194,19 @@ cat("BIC:", ridge_pca_bic, "\n")
 #Ridge Linear, Ridge Poly, Ridge Interaction
 ```{r}
 
-X <- model.matrix(Chance.of.Admit ~ ., data = data[, -1])
+X<-model.matrix(Chance.of.Admit~ . ,data=data[,-1])
 y <- data$Chance.of.Admit
 
-# 使用 Ridge 回归
-ridge_linear <- cv.glmnet(X, y, alpha = 0, nfolds = 5)
 
-# 构建多项式特征
-poly_features <- model.matrix(~ GRE.Score + I(GRE.Score^2) + TOEFL.Score + I(TOEFL.Score^2) +
-                                CGPA + I(CGPA^2) + I(CGPA^3) + SOP + LOR + Research, data)
+ridge_linear<-cv.glmnet(X,y,alpha=0,nfolds=5)
 
-ridge_poly <- cv.glmnet(poly_features, data$Chance.of.Admit, alpha = 0)
 
-# 构建交互特征
-interaction_features <- model.matrix(~ GRE.Score * University.Rating + CGPA * Research + 
-                                       TOEFL.Score + SOP + LOR, data)
+poly_features<-model.matrix(~GRE.Score+I(GRE.Score^2)+TOEFL.Score+I(TOEFL.Score^2)+CGPA+I(CGPA^2)+SOP+LOR+Research,data=data[,-1])
+ridge_poly<-cv.glmnet(poly_features, data$Chance.of.Admit, alpha = 0)
 
-ridge_interaction <- cv.glmnet(interaction_features, data$Chance.of.Admit, alpha = 0)
+
+interaction_features<-model.matrix(~GRE.Score*University.Rating+CGPA*Research+TOEFL.Score+SOP+LOR,data=data[,-1])
+ridge_interaction<-cv.glmnet(interaction_features, data$Chance.of.Admit, alpha = 0)
 
 
 ```
@@ -228,102 +217,96 @@ ridge_interaction <- cv.glmnet(interaction_features, data$Chance.of.Admit, alpha
 # Ridge Model Metrics
 
 
-ridge_r2 <- 1 - sum((y - ridge_pred)^2) / sum((y - mean(y))^2)  # R2
-ridge_rse <- sqrt(mean((y - ridge_pred)^2))  # Residual Standard Error
-ridge_mse <- mean((y - ridge_pred)^2)  # MSE
+ridge_r2<-1-sum((y-ridge_pred)^2)/sum((y-mean(y))^2)
+ridge_rse<-sqrt(mean((y-ridge_pred)^2))
+ridge_mse<-mean((y-ridge_pred)^2) 
 
 ridge_coef <- coef(ridge, s = ridge$lambda.min)
-n <- length(y)  # 样本数
-p <- length(ridge_coef) - 1  # 参数数量，减去截距
-ridge_aic <- n * log(mean((y - ridge_pred)^2)) + 2 * p  # AIC
-ridge_bic <- n * log(mean((y - ridge_pred)^2)) + log(n) * p  # BIC
+n<-length(y)  # # samples
+p<-length(ridge_coef)-1  # #coeff remove intercept
+ridge_aic<-n*log(mean((y-ridge_pred)^2))+2*p 
+ridge_bic<-n*log(mean((y-ridge_pred)^2))+log(n)*p 
 
 ######################################
-# Linear Model Metrics
-linear_pred <- predict(linear_model, data)
+#linear
+linear_pred<-predict(linear_model,data[,-1])
 
-linear_r2 <- summary(linear_model)$r.squared
-linear_rse <- summary(linear_model)$sigma
-linear_mse <- mean((data$Chance.of.Admit - linear_pred)^2)  # MSE
-linear_aic <- AIC(linear_model)
-linear_bic <- BIC(linear_model)
+linear_r2<-summary(linear_model)$r.squared
+linear_rse<-summary(linear_model)$sigma
+linear_mse<-mean((data$Chance.of.Admit-linear_pred)^2)
+linear_aic<-AIC(linear_model)
+linear_bic<-BIC(linear_model)
 
 #######################################
-# Polynomial Model Metrics
-poly_pred <- predict(poly_model, data)
+#poly
+poly_pred<-predict(poly_model,data)
 
-poly_r2 <- 1 - sum((data$Chance.of.Admit - poly_pred)^2) / sum((data$Chance.of.Admit - mean(data$Chance.of.Admit))^2)
-poly_rse <- sqrt(mean((data$Chance.of.Admit - poly_pred)^2))
-poly_mse <- mean((data$Chance.of.Admit - poly_pred)^2)  # MSE
-poly_aic <- AIC(poly_model)
-poly_bic <- BIC(poly_model)
+poly_r2<-1-sum((data$Chance.of.Admit-poly_pred)^2)/sum((data$Chance.of.Admit-mean(data$Chance.of.Admit))^2)
+poly_rse<-sqrt(mean((data$Chance.of.Admit-poly_pred)^2))
+poly_mse<-mean((data$Chance.of.Admit-poly_pred)^2) 
+poly_aic<-AIC(poly_model)
+poly_bic<-BIC(poly_model)
 
 ########################################
 # Interaction Model Metrics
-interaction_pred <- predict(inter_model, data)
+interaction_pred<-predict(inter_model,data[,-1])
 
-interaction_r2 <- 1 - sum((data$Chance.of.Admit - interaction_pred)^2) / sum((data$Chance.of.Admit - mean(data$Chance.of.Admit))^2)
-interaction_rse <- sqrt(mean((data$Chance.of.Admit - interaction_pred)^2))
-interaction_mse <- mean((data$Chance.of.Admit - interaction_pred)^2)  # MSE
-interaction_aic <- AIC(inter_model)
-interaction_bic <- BIC(inter_model)
+interaction_r2<- 1-sum((data$Chance.of.Admit-interaction_pred)^2)/sum((data$Chance.of.Admit-mean(data$Chance.of.Admit))^2)
+interaction_rse<-sqrt(mean((data$Chance.of.Admit-interaction_pred)^2))
+interaction_mse<-mean((data$Chance.of.Admit-interaction_pred)^2)  
+interaction_aic<-AIC(inter_model)
+interaction_bic<-BIC(inter_model)
 
 ########################################
+#Ridge liner
+ridge_linear_pred<-predict(ridge_linear,s=ridge_linear$lambda.min,newx = X)
 
-ridge_linear_pred <- predict(ridge_linear, s = ridge_linear$lambda.min, newx = X)
-# 计算指标
-ridge_linear_r2 <- 1 - sum((data$Chance.of.Admit - ridge_linear_pred)^2) / sum((data$Chance.of.Admit - mean(data$Chance.of.Admit))^2)
-ridge_linear_mse <- mean((data$Chance.of.Admit - ridge_linear_pred)^2)
-ridge_linear_rse <- sqrt(ridge_linear_mse)
+ridge_linear_r2<- 1-sum((data$Chance.of.Admit-ridge_linear_pred)^2)/sum((data$Chance.of.Admit-mean(data$Chance.of.Admit))^2)
+ridge_linear_mse<-mean((data$Chance.of.Admit-ridge_linear_pred)^2)
+ridge_linear_rse<-sqrt(ridge_linear_mse)
 
-n <- nrow(data)  # 样本数
-p <- ncol(data[, -c(1, 9)])  # 特征数量
-ridge_linear_aic <- n * log(ridge_linear_mse) + 2 * p
-ridge_linear_bic <- n * log(ridge_linear_mse) + log(n) * p
+n<-nrow(data)# #samples
+p<-ncol(data[,-c(1, 9)])##features
+ridge_linear_aic<-n*log(ridge_linear_mse)+2*p
+ridge_linear_bic<-n*log(ridge_linear_mse)+log(n)*p
 ########################################
-poly_features <- model.matrix(~ GRE.Score + I(GRE.Score^2) + TOEFL.Score + I(TOEFL.Score^2) +
-                                CGPA + I(CGPA^2) + I(CGPA^3) + SOP + LOR + Research, data)
+#Ridge poly
+poly_features<-model.matrix(~GRE.Score+I(GRE.Score^2)+TOEFL.Score+I(TOEFL.Score^2)+CGPA+I(CGPA^2)+SOP+LOR+Research,data[,-1])
 
-# Ridge 多项式模型
-ridge_poly <- cv.glmnet(poly_features, data$Chance.of.Admit, alpha = 0)
+ridge_poly<-cv.glmnet(poly_features,data$Chance.of.Admit, alpha = 0)
 
-# Ridge 多项式模型预测值
-ridge_poly_pred <- predict(ridge_poly, s = ridge_poly$lambda.min, newx = poly_features)
+ridge_poly_pred<- predict(ridge_poly,s=ridge_poly$lambda.min,newx=poly_features)
 
-# 计算指标
-ridge_poly_r2 <- 1 - sum((data$Chance.of.Admit - ridge_poly_pred)^2) / sum((data$Chance.of.Admit - mean(data$Chance.of.Admit))^2)
-ridge_poly_mse <- mean((data$Chance.of.Admit - ridge_poly_pred)^2)
-ridge_poly_rse <- sqrt(ridge_poly_mse)
+ridge_poly_r2<- 1-sum((data$Chance.of.Admit-ridge_poly_pred)^2)/sum((data$Chance.of.Admit-mean(data$Chance.of.Admit))^2)
+ridge_poly_mse<-mean((data$Chance.of.Admit-ridge_poly_pred)^2)
+ridge_poly_rse<-sqrt(ridge_poly_mse)
 
-p <- ncol(poly_features)  # 特征数量
-ridge_poly_aic <- n * log(ridge_poly_mse) + 2 * p
-ridge_poly_bic <- n * log(ridge_poly_mse) + log(n) * p
+p <- ncol(poly_features)##features
+ridge_poly_aic<-n*log(ridge_poly_mse)+2*p
+ridge_poly_bic<-n*log(ridge_poly_mse)+log(n)*p
 ########################################
-interaction_features <- model.matrix(~ GRE.Score * University.Rating + CGPA * Research +
-                                       TOEFL.Score + SOP + LOR, data)
+#Ridge interact
+interaction_features<-model.matrix(~GRE.Score*University.Rating+CGPA*Research+TOEFL.Score + SOP + LOR, data)
 
-# Ridge 交互模型
-ridge_interaction <- cv.glmnet(interaction_features, data$Chance.of.Admit, alpha = 0)
+ridge_interaction<-cv.glmnet(interaction_features,data$Chance.of.Admit,alpha = 0)
 
-# Ridge 交互模型预测值
-ridge_interaction_pred <- predict(ridge_interaction, s = ridge_interaction$lambda.min, newx = interaction_features)
+ridge_interaction_pred<-predict(ridge_interaction, s = ridge_interaction$lambda.min, newx=interaction_features)
 
-# 计算指标
-ridge_interaction_r2 <- 1 - sum((data$Chance.of.Admit - ridge_interaction_pred)^2) / sum((data$Chance.of.Admit - mean(data$Chance.of.Admit))^2)
-ridge_interaction_mse <- mean((data$Chance.of.Admit - ridge_interaction_pred)^2)
-ridge_interaction_rse <- sqrt(ridge_interaction_mse)
 
-p <- ncol(interaction_features)  # 特征数量
-ridge_interaction_aic <- n * log(ridge_interaction_mse) + 2 * p
-ridge_interaction_bic <- n * log(ridge_interaction_mse) + log(n) * p
+ridge_interaction_r2<-1 -sum((data$Chance.of.Admit-ridge_interaction_pred)^2)/sum((data$Chance.of.Admit-mean(data$Chance.of.Admit))^2)
+ridge_interaction_mse<-mean((data$Chance.of.Admit-ridge_interaction_pred)^2)
+ridge_interaction_rse<-sqrt(ridge_interaction_mse)
+
+p <- ncol(interaction_features) 
+ridge_interaction_aic<-n*log(ridge_interaction_mse)+2*p
+ridge_interaction_bic<-n*log(ridge_interaction_mse)+log(n)*p
 ########################################
 
 
 
 
 results <- data.frame(
-  Model = c("Linear", "Polynomial", "Interaction", "Ridge", "Ridge Linear", 
-            "Ridge Polynomial", "Ridge Interaction", "PCA Linear", "PCA + Ridge"),
+  Model = c("Linear", "Polynomial","Interaction","Ridge", "Ridge Linear","Ridge Polynomial","Ridge Interaction","PCA Linear", "PCA + Ridge"),
   R2 = c(linear_r2, poly_r2, interaction_r2, ridge_r2, ridge_linear_r2, ridge_poly_r2, ridge_interaction_r2, pca_r2, ridge_pca_r2),
   MSE = c(linear_mse, poly_mse, interaction_mse, ridge_mse, ridge_linear_mse, ridge_poly_mse, ridge_interaction_mse, pca_mse, ridge_pca_mse),
   RSE = c(linear_rse, poly_rse, interaction_rse, ridge_rse, ridge_linear_rse, ridge_poly_rse, ridge_interaction_rse, pca_rse, ridge_pca_rse),
@@ -331,7 +314,7 @@ results <- data.frame(
   BIC = c(linear_bic, poly_bic, interaction_bic, ridge_bic, ridge_linear_bic, ridge_poly_bic, ridge_interaction_bic, pca_bic, ridge_pca_bic)
 )
 
-# 打印结果表格
+
 print(results)
 
 
@@ -342,113 +325,64 @@ print(results)
 #plot
 ```{r}
 
-# 检查预测值是否正确生成
-cat("Length of actual values:", length(data$Chance.of.Admit), "\n")
-cat("Length of linear_pred:", length(linear_pred), "\n")
-cat("Length of poly_pred:", length(poly_pred), "\n")
-cat("Length of interaction_pred:", length(interaction_pred), "\n")
-cat("Length of ridge_pred:", length(ridge_pred), "\n")
-cat("Length of ridge_linear_pred:", length(ridge_linear_pred), "\n")
-cat("Length of ridge_poly_pred:", length(ridge_poly_pred), "\n")
-cat("Length of ridge_interaction_pred:", length(ridge_interaction_pred), "\n")
-cat("Length of pca_pred:", length(pca_pred), "\n")
-cat("Length of ridge_pca_pred:", length(ridge_pca_pred), "\n")
+#numeric vector
+pca_pred<-as.numeric(pca_pred)
+ridge_pca_pred<-as.numeric(ridge_pca_pred)
 
-plot_model <- function(actual, predicted, title) {
-  if (length(actual) != length(predicted)) {
-    stop("Actual and predicted values have different lengths!")
-  }
-  
-  # 创建数据框
-  data_plot <- data.frame(Actual = actual, Predicted = as.numeric(predicted))
-  
-  # 绘制散点图
-  ggplot(data = data_plot, aes(x = Actual, y = Predicted)) +
-    geom_point(color = "blue", alpha = 0.6) +
-    geom_abline(intercept = 0, slope = 1, linetype = "dashed", color = "red", size = 1) +
-    labs(title = title, x = "Actual Chance of Admit", y = "Predicted Chance of Admit") +
-    theme_minimal()
-}
+#PCA linear graph
+ggplot(data=data.frame(Actual = data$Chance.of.Admit, Predicted = pca_pred), aes(x = Actual, y = Predicted)) +geom_point(color = "blue", alpha = 0.6) + geom_abline(intercept=0, slope = 1, linetype = "dashed", color = "red", size = 1) +labs(title = "PCA Linear Model", x = "Actual Chance of Admit", y = "Predicted Chance of Admit") +
+  theme_minimal()
 
-# 确保预测值是向量（例如 ridge_pred 可能是矩阵，需转换为向量）
-ridge_pred <- as.numeric(ridge_pred)
-ridge_linear_pred <- as.numeric(ridge_linear_pred)
-ridge_poly_pred <- as.numeric(ridge_poly_pred)
-ridge_interaction_pred <- as.numeric(ridge_interaction_pred)
-pca_pred <- as.numeric(pca_pred)
-ridge_pca_pred <- as.numeric(ridge_pca_pred)
-
-# 绘制每个模型的图表
-plot_list <- list(
-  plot_model(data$Chance.of.Admit, linear_pred, "Linear Model"),
-  plot_model(data$Chance.of.Admit, poly_pred, "Polynomial Model"),
-  plot_model(data$Chance.of.Admit, interaction_pred, "Interaction Model"),
-  plot_model(data$Chance.of.Admit, ridge_pred, "Ridge Model"),
-  plot_model(data$Chance.of.Admit, ridge_linear_pred, "Ridge Linear Model"),
-  plot_model(data$Chance.of.Admit, ridge_poly_pred, "Ridge Polynomial Model"),
-  plot_model(data$Chance.of.Admit, ridge_interaction_pred, "Ridge Interaction Model"),
-  plot_model(data$Chance.of.Admit, pca_pred, "PCA Linear Model"),
-  plot_model(data$Chance.of.Admit, ridge_pca_pred, "PCA + Ridge Model")
-)
-
-# 使用循环逐一显示每个图表
-for (i in seq_along(plot_list)) {
-  print(plot_list[[i]])
-}
+#PCA ridge graph
+ggplot(data=data.frame(Actual = data$Chance.of.Admit, Predicted = ridge_pca_pred), aes(x = Actual,y=Predicted))+geom_point(color = "blue", alpha = 0.6)+geom_abline(intercept=0, slope = 1, linetype = "dashed", color = "red", size = 1) + labs(title = "PCA + Ridge Model",x ="Actual Chance of Admit", y = "Predicted Chance of Admit") +
+  theme_minimal()
 
 
 ```
 ```{r}
-# 加载必要的库
-library(glmnet)
+#Cross Validation to find overfit and genralization
 
-# PCA 主成分提取
-pca_result <- prcomp(num_features, scale. = TRUE)
-pca_data <- as.data.frame(pca_result$x[, 1:3])  # 提取前 3 个主成分
-colnames(pca_data) <- c("PC1", "PC2", "PC3")
-pca_data$Chance.of.Admit <- data$Chance.of.Admit  # 添加目标变量
+#PCA components
+pca_result<-prcomp(num_features, scale.=TRUE)
+pca_data<-as.data.frame(pca_result$x[, 1:3])  
+colnames(pca_data)<-c("PC1","PC2","PC3")
+pca_data$Chance.of.Admit <- data$Chance.of.Admit 
 
-# 准备数据
-X_pca <- as.matrix(pca_data[, -4])  # 主成分数据
-y_pca <- pca_data$Chance.of.Admit   # 目标变量
 
-# 设置交叉验证
-ridge_pca_cv <- cv.glmnet(X_pca, y_pca, alpha = 0, nfolds = 5)  # 5 折交叉验证
+X_pca<-as.matrix(pca_data[, -4])  #main data
+y_pca<-pca_data$Chance.of.Admit  #target
 
-# 打印交叉验证结果
-cat("Best Lambda from PCA Ridge Model:", ridge_pca_cv$lambda.min, "\n")
+#Cross validataion
+ridge_pca_cv <- cv.glmnet(X_pca, y_pca, alpha = 0, nfolds = 5)  # 5 folds
 
-# 绘制交叉验证误差曲线
+#best lambda by cv
+cat("Best Lambda from PCA Ridge Model:",ridge_pca_cv$lambda.min,"\n")
+
+# plot误差曲线
 plot(ridge_pca_cv)
-title("Cross-Validation Error for PCA + Ridge")
+title("Cross-Validation Error for PCA+Ridge")
+
+#train
+ridge_pca_train_pred<-predict(ridge_pca_cv, s = ridge_pca_cv$lambda.min,newx=X_pca)
+
+#calculate train residual
+ridge_pca_train_mse<-mean((y_pca - ridge_pca_train_pred)^2)
+cat("Training MSE for PCA + Ridge:",ridge_pca_train_mse)
 
 
-# 预测训练集
-ridge_pca_train_pred <- predict(ridge_pca_cv, s = ridge_pca_cv$lambda.min, newx = X_pca)
-
-# 计算训练误差
-ridge_pca_train_mse <- mean((y_pca - ridge_pca_train_pred)^2)
-cat("Training MSE for PCA + Ridge:", ridge_pca_train_mse, "\n")
+# test resudial
+ridge_pca_val_mse<-min(ridge_pca_cv$cvm) 
+cat("Validation MSE for PCA + Ridge:",ridge_pca_val_mse)
 
 
-# 验证集误差（来自 cv.glmnet 的输出）
-ridge_pca_val_mse <- min(ridge_pca_cv$cvm)  # 最小验证误差
-cat("Validation MSE for PCA + Ridge:", ridge_pca_val_mse, "\n")
-
-
-# 可视化训练误差和验证误差
-error_df <- data.frame(
-  Type = c("Training MSE", "Validation MSE"),
-  MSE = c(ridge_pca_train_mse, ridge_pca_val_mse)
+#visualization
+error_df<-data.frame(
+  Type=c("Training MSE", "Validation MSE"),
+  MSE=c(ridge_pca_train_mse,ridge_pca_val_mse)
 )
 
 library(ggplot2)
-ggplot(error_df, aes(x = Type, y = MSE, fill = Type)) +
-  geom_bar(stat = "identity", color = "black") +
-  labs(title = "Training vs Validation MSE for PCA + Ridge",
-       x = "Error Type", y = "Mean Squared Error") +
-  theme_minimal() +
-  scale_fill_manual(values = c("skyblue", "orange"))
+ggplot(error_df, aes(x = Type, y = MSE, fill = Type))+geom_bar(stat = "identity", color = "black")+labs(title = "Training vs Validation MSE for PCA + Ridge",x="Error Type", y = "Mean Squared Error") +theme_minimal()+scale_fill_manual(values = c("skyblue", "orange"))
 
 
 ```
