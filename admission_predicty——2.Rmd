@@ -1,0 +1,568 @@
+---
+title: "Final Project"
+output: html_document
+date: "2024-12-06"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+```{r}
+install.packages("corrplot")
+```
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r}
+library(readr)
+Admission <- read_csv("Admission_Predict_Ver1.1.csv")
+View(Admission)
+```
+
+```{r}
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(readr)
+library(gmodels)
+library(GGally)
+library(caret)
+library(ggcorrplot)
+library(car)
+library(corrplot)
+```
+
+
+
+```{r}
+
+# Load the dataset
+data <- read.csv("Admission_Predict_Ver1.1.csv")[, -1]
+
+print(sum(is.na(data)))
+
+print(sum(duplicated(data)))
+
+
+
+data$University.Rating <- as.factor(data$University.Rating)
+data$Research <- as.factor(data$Research)
+
+par(mfrow = c(2, 3))
+
+features <- names(data)
+features
+```
+
+```{r}
+
+
+for (feature in features) {
+  # 判断是连续变量还是分类变量
+  if (is.numeric(data[[feature]])) {
+    # 连续变量的直方图
+    hist(data[[feature]], main = paste("Histogram of", feature), xlab = feature, col = "skyblue", border = "black")
+    # 连续变量的箱线图
+    boxplot(data[[feature]], main = paste("Boxplot of", feature), ylab = feature, col = "orange")
+  } else {
+    # 分类变量的柱状图
+    barplot(table(data[[feature]]), main = paste("Barplot of", feature), col = "skyblue", xlab = feature, ylab = "Frequency")
+    # 分类变量的箱线图
+    boxplot(data$Chance.of.Admit ~ data[[feature]], main = paste(feature, "vs Chance of Admit"),
+            xlab = feature, ylab = "Chance of Admit", col = "lightgreen")
+  }
+}
+
+# 绘制每个特征与 Chance of Admit 的散点图（连续变量）或箱线图（分类变量）
+for (feature in features) {
+  if (is.numeric(data[[feature]])) {
+    # 连续变量的散点图
+    plot(data[[feature]], data$Chance.of.Admit, main = paste(feature, "vs Chance of Admit"),
+         xlab = feature, ylab = "Chance of Admit", col = "blue", pch = 19)
+  } else {
+    # 分类变量的箱线图
+    boxplot(data$Chance.of.Admit ~ data[[feature]], main = paste(feature, "vs Chance of Admit"),
+            xlab = feature, ylab = "Chance of Admit", col = "lightgreen")
+  }
+}
+
+```
+
+#CGPA vs chance存在非线性关系尤其在高分段有饱和 GRE和TOEFL也是 CGPA，TOEFL，GRE有非线性关系
+
+#从 SOP 和 LOR 的散点图来看，这些特征与 Chance of Admit 之间的关系较为分散，可能说明它们的影响较弱。
+
+#从柱状图中可以看出有research的和university rating高的有更高的chance of admit,
+#所以引入交互项
+
+#整个代码没有严重的异常值不需要处理异常值，LOR有一个值是1是一个异常值但是我觉得是真实情况不用处理
+
+#分布比较集中，应该不需要transform
+
+#确定分类变量对录取概率的影响，初步探索数据特征
+
+#SOP增长可能是非线性得，可能需要使用多项式回归
+
+```{r}
+# 提取连续变量
+numeric_features <- data[, sapply(data, is.numeric)]
+
+# 计算相关矩阵
+cor_matrix <- cor(numeric_features)
+
+# 打印相关矩阵
+print(cor_matrix)
+
+# 可视化相关矩阵
+
+corrplot(cor_matrix, method = "color", type = "upper", tl.col = "black", tl.srt = 45, addCoef.col = "black")
+
+```
+#we can see that CGPA and GRE score have highest correlation with chance of admit,说明它们对录取概率的影响可能非常显著。toefl也是
+
+#这些特征可以作为主要预测变量，甚至可能在多项式模型中加入非线性项
+
+#LOR和SOP与其他特征的相关性较低，可能因为他比较独立
+
+#通过逻辑推测，GRE和TOEFL可能存在交互关系，因为都反应申请人的学术能力
+
+#GRE和TOEFL相关性高，CGPA和GRE和TOEFL都很高，有可能存在多重共线，后续会考虑PCA和Ridge
+```{r}
+#basic model
+linear_model <- lm(Chance.of.Admit ~ ., data = data)
+summary(linear_model)
+
+```
+
+```{r}
+#polynomial model
+poly_model<-lm(Chance.of.Admit ~ GRE.Score + I(GRE.Score^2) +
+                   TOEFL.Score + I(TOEFL.Score^2) +
+                   CGPA + I(CGPA^2)  +
+                   SOP + LOR + Research, data = data)
+summary(poly_model)
+```
+
+```{r}
+interaction_model <- lm(Chance.of.Admit ~ GRE.Score * University.Rating +
+                          CGPA * Research +
+                          TOEFL.Score + SOP + LOR, data = data)
+summary(interaction_model)
+```
+```{r}
+# Compare models using AIC and BIC
+AIC(linear_model, poly_model, interaction_model)
+BIC(linear_model, poly_model, interaction_model)
+
+# Compare adjusted R^2
+cat("Linear Model Adjusted R^2:", summary(linear_model)$adj.r.squared, "\n")
+cat("Polynomial Model Adjusted R^2:", summary(poly_model)$adj.r.squared, "\n")
+cat("Interaction Model Adjusted R^2:", summary(interaction_model)$adj.r.squared, "\n")
+```
+```{r}
+# 计算 MSE 的函数
+calculate_mse <- function(actual, predicted) {
+  mean((actual - predicted)^2)
+}
+
+# 计算每个模型的预测值
+linear_pred <- predict(linear_model, data)
+poly_pred <- predict(poly_model, data)
+interaction_pred <- predict(interaction_model, data)
+
+# 计算 MSE
+mse_linear <- calculate_mse(data$Chance.of.Admit, linear_pred)
+mse_poly <- calculate_mse(data$Chance.of.Admit, poly_pred)
+mse_interaction <- calculate_mse(data$Chance.of.Admit, interaction_pred)
+
+# 打印结果
+cat("MSE of Linear Model:", mse_linear, "\n")
+cat("MSE of Polynomial Model:", mse_poly, "\n")
+cat("MSE of Interaction Model:", mse_interaction, "\n")
+```
+
+
+```{r}
+# Add predictions to the dataset
+data$Linear_Pred <- predict(linear_model, data)
+data$Poly_Pred <- predict(poly_model, data)
+data$Interaction_Pred <- predict(interaction_model, data)
+
+# Plot actual vs predicted values for each model
+library(ggplot2)
+
+ggplot(data, aes(x = Chance.of.Admit, y = Linear_Pred)) +
+  geom_point(color = "blue") +
+  geom_abline(intercept = 0, slope = 1, linetype = "dashed", color = "red") +
+  ggtitle("Linear Model: Actual vs Predicted") +
+  theme_minimal()
+
+ggplot(data, aes(x = Chance.of.Admit, y = Poly_Pred)) +
+  geom_point(color = "green") +
+  geom_abline(intercept = 0, slope = 1, linetype = "dashed", color = "red") +
+  ggtitle("Polynomial Model: Actual vs Predicted") +
+  theme_minimal()
+
+ggplot(data, aes(x = Chance.of.Admit, y = Interaction_Pred)) +
+  geom_point(color = "purple") +
+  geom_abline(intercept = 0, slope = 1, linetype = "dashed", color = "red") +
+  ggtitle("Interaction Model: Actual vs Predicted") +
+  theme_minimal()
+
+```
+
+
+
+```{r}
+
+# Load necessary libraries
+library(readr)
+library(ggcorrplot)
+
+# Load the dataset
+
+# Rename columns to make them more R-friendly
+colnames(data) <- c("Serial_No", "GRE_Score", "TOEFL_Score", "University_Rating", "SOP", "LOR", "CGPA", "Research", "Chance_of_Admit")
+
+# Select relevant columns for analysis
+subset_data <- data[, c("GRE_Score", "TOEFL_Score", "SOP", "LOR", "CGPA")]
+
+# Ensure all selected columns are numeric
+subset_data <- subset_data %>% mutate(across(everything(), as.numeric))
+
+# Plot histograms for each numerical variable
+par(mfrow = c(2, 3))
+for (col in colnames(subset_data)) {
+  if (!is.null(subset_data[[col]])) {
+    hist(subset_data[[col]], main = paste("Histogram of", col), xlab = col, col = "skyblue", border = "black")
+  }
+}
+
+# Plot correlation matrix
+cor_matrix <- cor(subset_data, use = "complete.obs")
+ggcorrplot(cor_matrix, hc.order = TRUE, type = "lower", lab = TRUE)
+
+```
+#CGPA，TOEFL，GRE这些都高度相关，需要进行PCA
+#LOR与其他变量相关性较低，或许是相对独立因素
+
+
+
+
+
+
+
+
+```{r}
+# 线性回归建模
+model <- lm(Chance_of_Admit ~ GRE_Score + TOEFL_Score + CGPA + SOP + LOR + University_Rating + Research, data = data)
+
+# 模型摘要
+summary(model)
+
+
+library(glmnet)
+
+# 准备数据
+x <- model.matrix(Chance_of_Admit ~ ., data = data)[, -1]  # 去掉截距
+y <- data$Chance_of_Admit
+
+# Ridge 回归 (alpha = 0)
+ridge_model <- glmnet(x, y, alpha = 0)
+
+# 使用交叉验证选择最佳 λ
+cv_ridge <- cv.glmnet(x, y, alpha = 0)
+best_lambda <- cv_ridge$lambda.min
+
+# 查看最佳模型的系数
+ridge_coefficients <- coef(cv_ridge, s = best_lambda)
+print(ridge_coefficients)
+
+# 计算 Ridge 模型的 MSE
+ridge_predictions <- predict(cv_ridge, newx = x, s = best_lambda)
+ridge_mse <- mean((y - ridge_predictions)^2)
+
+# 计算原始线性模型的 MSE
+lm_predictions <- predict(model, newdata = data)
+lm_mse <- mean((data$Chance_of_Admit - lm_predictions)^2)
+
+# 输出结果
+print(paste("Ridge MSE:", ridge_mse))
+print(paste("Linear Model MSE:", lm_mse))
+
+ridge_coefficients <- coef(cv_ridge, s = best_lambda)
+lm_coefficients <- coef(model)
+
+# 输出比较
+print("Ridge Coefficients:")
+print(ridge_coefficients)
+print("Linear Model Coefficients:")
+print(lm_coefficients)
+
+
+# 残差图
+ridge_residuals <- y - ridge_predictions
+lm_residuals <- data$Chance_of_Admit - lm_predictions
+
+par(mfrow = c(1, 2))
+plot(ridge_predictions, ridge_residuals, main = "Ridge Residuals vs Fitted")
+plot(lm_predictions, lm_residuals, main = "Linear Model Residuals vs Fitted")
+par(mfrow = c(1, 1))
+
+ridge_r2 <- 1 - sum((y - ridge_predictions)^2) / sum((y - mean(y))^2)
+lm_r2 <- summary(model)$r.squared
+
+print(paste("Ridge R²:", ridge_r2))
+print(paste("Linear Model R²:", lm_r2))
+
+
+# 使用 Ridge 模型预测
+ridge_predictions <- predict(cv_ridge, newx = x, s = best_lambda)
+
+# 计算残差
+ridge_residuals <- y - ridge_predictions
+
+# 计算 Residual Standard Error
+ridge_rse <- sqrt(sum(ridge_residuals^2) / (length(y) - length(coef(cv_ridge, s = best_lambda))))
+print(paste("Ridge Residual Standard Error:", ridge_rse))
+
+lm_rse <- summary(model)$sigma
+print(paste("Linear Model Residual Standard Error:", lm_rse))
+# 计算 VIF
+#library(car)
+#vif_values <- vif(model)
+#print(vif_values)
+
+
+```
+#R-squared, Adjusted R-squared足够高，预测误差较低，不需要使用PCA
+
+```{r}
+# 计算 Adjusted R-squared 和残差分布
+summary(model)
+
+# 可视化残差
+par(mfrow = c(1, 2))
+plot(model$fitted.values, model$residuals, 
+     main = "Residuals vs Fitted", xlab = "Fitted Values", ylab = "Residuals")
+hist(model$residuals, main = "Residual Histogram", xlab = "Residuals")
+par(mfrow = c(1, 1))
+
+qqnorm(model$residuals, main = "Q-Q Plot of Residuals")
+qqline(model$residuals, col = "red")
+
+shapiro.test(model$residuals)
+
+shapiro.test(data$Chance_of_Admit)
+#transform --> Normality
+data$dependent_variable_log <- log(data$Chance_of_Admit)
+
+shapiro.test(log(data$Chance_of_Admit))
+
+data$GRE_Score_scaled <- scale(data$GRE_Score)
+data$TOEFL_Score_scaled <- scale(data$TOEFL_Score)
+# Re-fitting the model with transformed variables
+model_transformed <- lm(dependent_variable_log ~ GRE_Score_scaled + TOEFL_Score_scaled + CGPA + SOP + LOR + University_Rating + Research, data = data)
+summary(model_transformed)
+
+# Visualizing residuals for the new model
+par(mfrow = c(1, 2))
+plot(model_transformed$fitted.values, model_transformed$residuals, 
+     main = "Residuals vs Fitted", xlab = "Fitted Values", ylab = "Residuals")
+hist(model_transformed$residuals, main = "Residual Histogram", xlab = "Residuals")
+par(mfrow = c(1, 1))
+qqnorm(model_transformed$residuals, main = "Q-Q Plot of Residuals")
+qqline(model_transformed$residuals, col = "red")
+
+# Testing residuals' normality again
+shapiro.test(model_transformed$residuals)
+
+```
+#根据qq图怀疑残差不是正态分布，使用shapiro test进行检测确定残差不是正态分布,这对推断如t test，CI会产生影响
+#但是如果我们的主要目标是预测而不是推断，正态性的偏离可能不会显著影响模型预测能力
+#从qq图来看，残差得偏离主要集中在尾部，实际上轻微的尾部偏离对线性回归的影响可能并不大
+#如果有顾虑可以考虑transform data
+#transform 后结果更差
+#However, given the nature of the deviation and its mild impact on overall model performance, such adjustments may not be critical.
+#adjusted R^2 us actually high in predictive accuracy, so may good to not transform or looking for new models.
+
+```{r}
+#model_poly <- lm(Chance_of_Admit ~ GRE_Score + TOEFL_Score + CGPA + poly(SOP, 2) + LOR + University_Rating + Research, data = data)
+#summary(model_poly)
+#polynomial regression
+
+library(caret)
+
+# 定义变量和阶数范围
+variables <- c("GRE_Score", "TOEFL_Score", "CGPA", "SOP", "LOR")
+max_degree <- 3  # 最大多项式阶数
+
+# 函数用于评估每个变量的最优阶数
+find_best_poly <- function(var, data, max_degree) {
+  mse_list <- c()
+  for (deg in 1:max_degree) {
+    formula <- as.formula(paste("Chance_of_Admit ~ poly(", var, ",", deg, ")"))
+    model <- train(formula, data = data, method = "lm",
+                   trControl = trainControl(method = "cv", number = 2))
+    mse_list <- c(mse_list, model$results$RMSE)
+  }
+  best_degree <- which.min(mse_list)
+  return(best_degree)
+}
+
+# 计算每个变量的最优多项式阶数
+best_degrees <- sapply(variables, find_best_poly, data = data, max_degree = max_degree)
+print(best_degrees)
+
+#model_poly <- lm(Chance_of_Admit ~ poly(GRE_Score,2) + TOEFL_Score + poly(CGPA,2) + poly(SOP, 3) + poly(LOR,2), data = data)
+#summary(model_poly)
+```
+```{r}
+#model_interaction <- lm(Chance_of_Admit ~ GRE_Score*TOEFL_Score + University_Rating + CGPA + SOP + LOR * Research, data = data)
+#summary(model_interaction)
+#interaction model
+
+# Generate a model with all pairwise interactions
+model_all_interactions <- lm(Chance_of_Admit ~ (GRE_Score + TOEFL_Score + CGPA + SOP+ University_Rating + LOR*Research)^2, data = data)
+summary(model_all_interactions)
+# Load necessary library
+library(MASS)
+
+# Perform stepwise regression to select significant interactions
+model_step <- stepAIC(model_all_interactions, direction = "both")
+summary(model_step)
+# Load necessary library
+library(boot)
+
+# Define a cross-validation function
+cv_error <- function(data, indices) {
+  # Split data into training and test sets
+  train_data <- data[indices, ]
+  test_data <- data[-indices, ]
+  
+  # Fit the model using training data
+  model <- lm(Chance_of_Admit ~ GRE_Score + TOEFL_Score + CGPA + SOP + LOR + University_Rating + Research + GRE_Score:TOEFL_Score + LOR:Research, data = train_data)
+  
+  # Predict on test data
+  predictions <- predict(model, newdata = test_data)
+  
+  # Calculate Mean Squared Error (MSE)
+  mse <- mean((test_data$Chance_of_Admit - predictions)^2)
+  return(mse)
+}
+
+# Perform cross-validation
+set.seed(123)  # For reproducibility
+cv_results <- boot(data, statistic = cv_error, R = 100)  # R specifies the number of folds
+print("cv_results")
+print(cv_results)
+```
+```{r}
+model_interaction <- lm(Chance_of_Admit ~ GRE_Score + TOEFL_Score + CGPA + SOP + LOR + 
+                  University_Rating + Research + 
+                  GRE_Score:CGPA + CGPA:LOR + CGPA:Research + SOP:University_Rating, data = data)
+summary(model_interaction)
+
+```
+
+
+
+```{r}
+library(caret)
+pca <- preProcess(data[, c("GRE_Score", "TOEFL_Score", "CGPA", "SOP", "LOR")], method = "pca", pcaComp = 3)
+pca_data <- predict(pca, data)
+model_pca <- lm(Chance_of_Admit ~ PC1 + PC2 + PC3 + University_Rating + Research, data = cbind(data, pca_data))
+summary(model_pca)
+#PCA model
+```
+
+
+```{r}
+library(caret)
+
+# 定义模型
+model_list <- list(
+  base = lm(Chance_of_Admit ~ GRE_Score + TOEFL_Score + CGPA + SOP + LOR + University_Rating + Research, data = data),
+  poly = lm(Chance_of_Admit ~ GRE_Score + TOEFL_Score + CGPA + poly(SOP, 2) + LOR + University_Rating + Research, data = data),
+  interaction = model_interaction <- lm(Chance_of_Admit ~ GRE_Score + TOEFL_Score + CGPA + SOP + LOR + 
+                  University_Rating + Research + 
+                  GRE_Score:CGPA + CGPA:LOR + CGPA:Research + SOP:University_Rating, data = data)
+)
+
+# 定义交叉验证
+cv_results <- lapply(model_list, function(model) {
+  train_control <- trainControl(method = "cv", number = 100)
+  train(Chance_of_Admit ~ ., data = data, method = "lm", trControl = train_control)
+})
+
+# 打印 RMSE 比较
+sapply(cv_results, function(res) res$results$RMSE)
+
+```
+
+#根据Cross validation，不同的model并没有太大区别，决定使用linear regression
+
+
+#接下来根据MSE和R^2发现reduced model和full model区别不大，可以使用reduced model？
+```{r}
+# Split the data into training and testing sets
+set.seed(42)
+trainIndex <- sample(1:nrow(data), 0.8 * nrow(data))
+trainData <- data[trainIndex, ]
+testData <- data[-trainIndex, ]
+
+# Fit a linear regression model
+model <- lm(Chance_of_Admit ~ GRE_Score + TOEFL_Score + University_Rating + SOP + LOR + CGPA + Research, data = trainData)
+
+# Summarize the model
+summary(model)
+
+# Make predictions on the test set
+predictions <- predict(model, newdata = testData)
+
+# Calculate Mean Squared Error (MSE)
+mse <- mean((testData$Chance.of.Admit - predictions)^2)
+
+# Calculate R-squared
+rss <- sum((testData$Chance.of.Admit - predictions)^2)
+tss <- sum((testData$Chance.of.Admit - mean(trainData$Chance.of.Admit))^2)
+r2 <- 1 - (rss/tss)
+
+# Print MSE and R-squared for the reduced model
+print(paste("Full Model MSE:", mse))
+print(paste("Full Model R-squared:", r2))
+```
+
+```{r}
+# Split the data into training and testing sets
+set.seed(42)
+trainIndex <- sample(1:nrow(data), 0.8 * nrow(data))
+trainData <- data[trainIndex, ]
+testData <- data[-trainIndex, ]
+
+# Fit the reduced linear regression model excluding insignificant variables
+reduced_model <- lm(Chance_of_Admit ~ GRE_Score + TOEFL_Score + LOR + CGPA + Research, data = trainData)
+
+# Summarize the reduced model
+summary(reduced_model)
+
+# Make predictions on the test set using the reduced model
+reduced_predictions <- predict(reduced_model, newdata = testData)
+
+# Calculate Mean Squared Error (MSE) for the reduced model
+reduced_mse <- mean((testData$Chance.of.Admit - reduced_predictions)^2, na.rm = TRUE)
+
+# Calculate R-squared for the reduced model
+rss <- sum((testData$Chance.of.Admit - reduced_predictions)^2, na.rm = TRUE)
+tss <- sum((testData$Chance.of.Admit - mean(trainData$Chance.of.Admit, na.rm = TRUE))^2, na.rm = TRUE)
+reduced_r2 <- 1 - (rss/tss)
+
+# Print MSE and R-squared for the reduced model
+print(paste("Reduced Model MSE:", reduced_mse))
+print(paste("Reduced Model R-squared:", reduced_r2))
+
+```
