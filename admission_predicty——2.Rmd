@@ -30,81 +30,73 @@ library(ggcorrplot)
 library(car)
 library(corrplot)
 library(glmnet)
-
 ```
 
 
 
 ```{r}
 
-# Load the dataset
-data <- read.csv("Admission_Predict_Ver1.1.csv")
+# load data
+data<-read.csv("Admission_Predict_Ver1.1.csv")
 
+#0 na
 print(sum(is.na(data)))
 
+#0 duplicate
 print(sum(duplicated(data)))
 
-set.seed(123)
+#set random seed for later cross validation
+set.seed(42)
 
+# process category variables
 data$University.Rating <- as.factor(data$University.Rating)
 data$Research <- as.factor(data$Research)
 
-par(mfrow = c(2, 3))
-
-features <- names(data)
-features
+features <- names(data[0,-1])
+#features
 ```
 
 ```{r}
 
-
-for (feature in features) {
-  # 判断是连续变量还是分类变量
+for(feature in features) {
+  #distinguish continuous and categorical variables
   if (is.numeric(data[[feature]])) {
-    # 连续变量的直方图
-    hist(data[[feature]], main = paste("Histogram of", feature), xlab = feature, col = "skyblue", border = "black")
-    # 连续变量的箱线图
-    boxplot(data[[feature]], main = paste("Boxplot of", feature), ylab = feature, col = "orange")
-  } else {
-    # 分类变量的柱状图
-    barplot(table(data[[feature]]), main = paste("Barplot of", feature), col = "skyblue", xlab = feature, ylab = "Frequency")
-    # 分类变量的箱线图
-    boxplot(data$Chance.of.Admit ~ data[[feature]], main = paste(feature, "vs Chance of Admit"),
-            xlab = feature, ylab = "Chance of Admit", col = "lightgreen")
+    #continuous histogram
+    hist(data[[feature]],main=paste("Histogram of",feature),xlab=feature,col="skyblue",border="black")
+    #boxplot
+    boxplot(data[[feature]],main=paste("Boxplot of",feature),ylab=feature,col= "orange")
+  }
+  else {
+    #catego histogram
+    barplot(table(data[[feature]]),main=paste("Barplot of",feature),col="skyblue",xlab= feature,ylab="Frequency")
+    #boxplot
+    boxplot(data$Chance.of.Admit~data[[feature]],main=paste(feature,"vs Chance of Admit"),xlab=feature,ylab="Chance of Admit",col= "lightgreen")
   }
 }
 
-# 绘制每个特征与 Chance of Admit 的散点图（连续变量）或箱线图（分类变量）
-for (feature in features) {
-  if (is.numeric(data[[feature]])) {
-    # 连续变量的散点图
-    plot(data[[feature]], data$Chance.of.Admit, main = paste(feature, "vs Chance of Admit"),
-         xlab = feature, ylab = "Chance of Admit", col = "blue", pch = 19)
-  } else {
-    # 分类变量的箱线图
-    boxplot(data$Chance.of.Admit ~ data[[feature]], main = paste(feature, "vs Chance of Admit"),
-            xlab = feature, ylab = "Chance of Admit", col = "lightgreen")
+#scatter or box of features vs chance
+for(feature in features) {
+  if(is.numeric(data[[feature]])){
+    #continuous scatter
+    plot(data[[feature]],data$Chance.of.Admit, main=paste(feature,"vs Chance of Admit"),xlab= feature,ylab="Chance of Admit", col="blue",pch=19)#pch fill
+  } 
+  else{
+    #catego box
+    boxplot(data$Chance.of.Admit~data[[feature]],main=paste(feature,"vs Chance of Admit"),xlab=feature,ylab="Chance of Admit",col="lightgreen")
   }
 }
 
 ```
 
 
-
 ```{r}
-# 提取连续变量
-numeric_features <- data[, -1]
-numeric_features <- numeric_features[, sapply(numeric_features, is.numeric)]
+#get continous variables
+num_features<-data[,-1] #exclude serial number
+num_features<-num_features[,sapply(num_features,is.numeric)]
 
-# 计算相关矩阵
-cor_matrix <- cor(numeric_features)
-
-# 打印相关矩阵
-print(cor_matrix)
-
-# 可视化相关矩阵
-
-corrplot(cor_matrix, method = "color", type = "upper", tl.col = "black", tl.srt = 45, addCoef.col = "black")
+#correlation matrix 
+cor_matrix<-cor(num_features)
+corrplot(cor_matrix,method="color",type="upper",tl.col="black",tl.srt=45,addCoef.col="black")
 
 ```
 
@@ -114,78 +106,70 @@ corrplot(cor_matrix, method = "color", type = "upper", tl.col = "black", tl.srt 
 #Linear Model
 ```{r}
 #basic model
-linear_model <- lm(Chance.of.Admit ~ ., data = data[, -1])
+linear_model<-lm(Chance.of.Admit~.,data=data[,-1])
 summary(linear_model)
-
 ```
 
 
 #Polynomial Model
 ```{r}
 #polynomial model
-poly_model<-lm(Chance.of.Admit ~ GRE.Score + I(GRE.Score^2) +
-                   TOEFL.Score + I(TOEFL.Score^2) +
-                   CGPA + I(CGPA^2)  +
-                   SOP + LOR + Research, data = data)
+poly_model<-lm(Chance.of.Admit~GRE.Score+I(GRE.Score^2)+TOEFL.Score+I(TOEFL.Score^2)+CGPA+I(CGPA^2)+SOP+LOR+Research,data=data[,-1])
 summary(poly_model)
 ```
 
 #Interaction Model
 ```{r}
-interaction_model <- lm(Chance.of.Admit ~ GRE.Score * University.Rating +
-                          CGPA * Research +
-                          TOEFL.Score + SOP + LOR, data = data)
-summary(interaction_model)
+inter_model<-lm(Chance.of.Admit~GRE.Score*University.Rating+CGPA*Research+TOEFL.Score+SOP+LOR,data=data[,-1])
+summary(inter_model)
 ```
 
 #PCA model
 ```{r}
-# 使用 preProcess 进行 PCA 并提取 3 个主成分
-pca_lm <- preProcess(data[, c("GRE.Score", "TOEFL.Score", "CGPA", "SOP", "LOR")], method = "pca", pcaComp = 3)
-pca_lm_data <- predict(pca_lm, data)
+#preprocess to PCA, with 3 components
+pca_lm<-preProcess(data[,c("GRE.Score","TOEFL.Score","CGPA","SOP","LOR")],method="pca",pcaComp=3)
+pca_lm_data<-predict(pca_lm,data)
 
-# 修改列名以确保与公式中一致
-colnames(pca_lm_data) <- c("PC1", "PC2", "PC3")
+# change variable names for later formula calculation
+colnames(pca_lm_data)<-c("PC1","PC2","PC3")
 
-# 合并 PCA 主成分和原始数据
-pca_combined_data <- cbind(data, pca_lm_data)
+#combine pca components and data
+pca_cbdata <- cbind(data, pca_lm_data)
 
-# 构建 PCA 线性模型
-model_pca <- lm(Chance.of.Admit ~ PC1 + PC2 + PC3 + University.Rating + Research, data = pca_combined_data)
+#model implement
+model_pca<-lm(Chance.of.Admit~PC1+PC2+PC3+University.Rating+Research,data=pca_cbdata)
 summary(model_pca)
 
-# 计算 PCA 线性模型指标
-pca_pred <- predict(model_pca, pca_combined_data)  # 预测值
-pca_r2 <- summary(model_pca)$r.squared  # R2
-pca_mse <- mean((data$Chance.of.Admit - pca_pred)^2)  # MSE
-pca_rse <- sqrt(pca_mse)  # RSE
-pca_aic <- AIC(model_pca)  # AIC
-pca_bic <- BIC(model_pca)  # BIC
+#statistical value for later model comparison
+pca_pred<-predict(model_pca,pca_cbdata)
+pca_r2<-summary(model_pca)$r.squared
+pca_mse<-mean((data$Chance.of.Admit-pca_pred)^2)
+pca_rse<-sqrt(pca_mse)
+pca_aic<-AIC(model_pca) 
+pca_bic<-BIC(model_pca)  
 
+#reference: https://rstudio-pubs-static.s3.amazonaws.com/92006_344e916f251146daa0dc49fef94e2104.html?utm_source=chatgpt.com
 ```
 
-#Ridge Model
+#Ridge Regression Model
 ```{r}
 
-# 准备数据
-ridge <- cv.glmnet(as.matrix(data[, -c(1, 9)]), data$Chance.of.Admit, alpha = 0)
-ridge_pred <- predict(ridge, s = ridge$lambda.min, newx = as.matrix(data[, -c(1, 9)]))
 
+ridge<-cv.glmnet(as.matrix(data[, -c(1, 9)]),data$Chance.of.Admit,alpha = 0)
+ridge_pred<-predict(ridge,s=ridge$lambda.min,newx=as.matrix(data[,-c(1,9)]))
 
+#reference: https://glmnet.stanford.edu/articles/glmnet.html
 ```
 
 #PCA Ridge
 ```{r}
-pca_result <- prcomp(numeric_features, scale. = TRUE)
+pca_result<-prcomp(num_features,scale.=TRUE)
 summary(pca_result)
 
-
-# 提取主成分并训练模型
 pca_data <- as.data.frame(pca_result$x[, 1:2])
-colnames(pca_data) <- c("PC1", "PC2")
+colnames(pca_data) <- c("PC1","PC2")
 pca_data$Chance.of.Admit <- data$Chance.of.Admit
 
-# Ridge 回归使用 PCA
 X_pca <- as.matrix(pca_data[, -3])
 y_pca <- pca_data$Chance.of.Admit
 ridge_pca <- cv.glmnet(X_pca, y_pca, alpha = 0, nfolds = 5)
@@ -276,13 +260,13 @@ poly_bic <- BIC(poly_model)
 
 ########################################
 # Interaction Model Metrics
-interaction_pred <- predict(interaction_model, data)
+interaction_pred <- predict(inter_model, data)
 
 interaction_r2 <- 1 - sum((data$Chance.of.Admit - interaction_pred)^2) / sum((data$Chance.of.Admit - mean(data$Chance.of.Admit))^2)
 interaction_rse <- sqrt(mean((data$Chance.of.Admit - interaction_pred)^2))
 interaction_mse <- mean((data$Chance.of.Admit - interaction_pred)^2)  # MSE
-interaction_aic <- AIC(interaction_model)
-interaction_bic <- BIC(interaction_model)
+interaction_aic <- AIC(inter_model)
+interaction_bic <- BIC(inter_model)
 
 ########################################
 
@@ -419,7 +403,7 @@ for (i in seq_along(plot_list)) {
 library(glmnet)
 
 # PCA 主成分提取
-pca_result <- prcomp(numeric_features, scale. = TRUE)
+pca_result <- prcomp(num_features, scale. = TRUE)
 pca_data <- as.data.frame(pca_result$x[, 1:3])  # 提取前 3 个主成分
 colnames(pca_data) <- c("PC1", "PC2", "PC3")
 pca_data$Chance.of.Admit <- data$Chance.of.Admit  # 添加目标变量
@@ -429,7 +413,6 @@ X_pca <- as.matrix(pca_data[, -4])  # 主成分数据
 y_pca <- pca_data$Chance.of.Admit   # 目标变量
 
 # 设置交叉验证
-set.seed(123)
 ridge_pca_cv <- cv.glmnet(X_pca, y_pca, alpha = 0, nfolds = 5)  # 5 折交叉验证
 
 # 打印交叉验证结果
